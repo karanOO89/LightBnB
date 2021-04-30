@@ -91,10 +91,12 @@ exports.addUser = addUser;
  */
 const getAllReservations = function (guest_id, limit = 10) {
   const queryString = `
-  SELECT properties.* ,reservations.start_date ,reservations.end_date FROM reservations
+  SELECT properties.* ,reservations.start_date ,reservations.end_date,AVG(property_reviews.rating) as average_rating FROM reservations
   JOIN properties ON properties.id =  reservations.property_id
   JOIN users ON reservations.guest_id = users.id 
-  WHERE guest_id = $1 AND reservations.end_date < now()::date
+  JOIN property_reviews ON reservations.id = property_reviews.reservation_id 
+  WHERE reservations.guest_id = $1 AND reservations.end_date < now()::date
+  GROUP BY properties.id,reservations.id
   ORDER BY start_date DESC
   LIMIT $2`;
 
@@ -126,13 +128,11 @@ const getAllProperties = (options, limit = 10) => {
       JOIN property_reviews ON properties.id = property_id
       WHERE true
       `;
-
   if (options.city) {
     const city = titleCase(options.city);
     queryParams.push(`%${city}%`);
     queryString += `AND city LIKE $${queryParams.length} `;
   }
-  console.log(options);
   if (options.minimum_price_per_night) {
     const price = options.minimum_price_per_night;
     queryParams.push(`${price}` * 100);
@@ -148,13 +148,13 @@ const getAllProperties = (options, limit = 10) => {
     queryParams.push(`${rating}`);
     queryString += `AND property_reviews.rating >= $${queryParams.length} `;
   }
-  // if (options.owner_id) {
-  //   const owner_id = options.owner_id;
-  //   queryParams.push(`${owner_id}`);
-  //   queryString += `AND properties.owner_id = $${queryParams.length} `;
-  // }
-
+  if (options.owner_id) {
+    const owner_id = options.owner_id;
+    queryParams.push(`${owner_id}`);
+    queryString += `AND properties.owner_id = $${queryParams.length} `;
+  }
   queryParams.push(limit);
+  console.log(queryString, queryParams);
   queryString += `
       GROUP BY properties.id 
       ORDER BY cost_per_night
